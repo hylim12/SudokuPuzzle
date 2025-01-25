@@ -1,42 +1,43 @@
-(defun calculate-entropy (dataset)
-  "Computes the entropy of the dataset to evaluate splitting criteria."
-  (let ((freqs (make-hash-table))
-        (total (length dataset)))
-    (loop for (puzzle . solution) in dataset do
-      (incf (gethash solution freqs 0)))
-    (loop for v being the hash-values in freqs summing
-          (- (/ v total) (* (/ v total) (log (/ v total) 2))))))
+;;GridSearch CV
+(defun cartesian-product (lists)
+  "Generate all possible combinations of values from multiple lists."
+  (if (null lists)
+      '(())
+      (let ((rest (cartesian-product (cdr lists))))
+        (apply 'append (mapcar (lambda (x)
+                                 (mapcar (lambda (y) (cons x y)) rest))
+                               (car lists))))))
 
-(defun split-dataset (dataset feature-index threshold)
-  "Splits the dataset based on a feature index and threshold value."
-  (let ((left nil) (right nil))
-    (loop for (puzzle . solution) in dataset do
-      (if (<= (aref puzzle 0 feature-index) threshold)
-          (push (cons puzzle solution) left)
-          (push (cons puzzle solution) right)))
-    (values left right)))
+(defun grid-search (param-grid data labels test-data test-labels)
+  "Performs GridSearch over a parameter grid."
+  (let ((combinations (cartesian-product (mapcar #'cdr param-grid)))
+        (best-score -1)
+        (best-params nil))
+    (dolist (combo combinations)
+      (let ((params (mapcar #'cons (mapcar #'car param-grid) combo)))
+        (let ((score (train-and-evaluate data labels test-data test-labels
+                                         (cdr (assoc 'max-depth params))
+                                         (cdr (assoc 'min-samples params)))))
+          (when (> score best-score)
+            (setf best-score score
+                  best-params params)))))
+    (list best-params best-score)))
 
-(defun build-tree (dataset &key (max-depth 10) (min-samples 5))
-  "Builds a decision tree with hyperparameter tuning."
-  (if (or (null dataset) (<= max-depth 0) (< (length dataset) min-samples))
-      (list :leaf (calculate-entropy dataset))
-      (multiple-value-bind (left right)
-          (split-dataset dataset (random 9) (random 9))
-        (list :split (random 9)
-              :left (build-tree left :max-depth (1- max-depth) :min-samples min-samples)
-              :right (build-tree right :max-depth (1- max-depth) :min-samples min-samples)))))
+;; RandomSearch CV
+(defun random-sample (list)
+  "Select a random element from a list."
+  (nth (random (length list)) list))
 
-(defun tune-hyperparameters (dataset)
-  "Performs hyperparameter tuning using different values for max-depth and min-samples."
-  (loop for depth in '(5 10 15)
-        maximizing (let ((tree (build-tree dataset :max-depth depth :min-samples 10)))
-                     (calculate-entropy dataset))
-        into best-depth
-        finally (return best-depth)))
-
-(defun test-decision-tree (filename)
-  "Loads Sudoku dataset, builds a decision tree, and tunes hyperparameters."
-  (let ((dataset (sudoku-hyperparameters::read-sudoku-dataset filename)))  ; <-- Fully qualified function call
-    (format t "Optimal max-depth: ~a~%" (tune-hyperparameters dataset))
-    (let ((tree (build-tree dataset :max-depth 10 :min-samples 5)))
-      (format t "Decision Tree Structure: ~a~%" tree))))
+(defun random-search (param-grid data labels test-data test-labels num-trials)
+  "Performs RandomSearch for hyperparameter tuning."
+  (let ((best-score -1)
+        (best-params nil))
+    (dotimes (i num-trials)
+      (let ((params (mapcar (lambda (p) (cons (car p) (random-sample (cdr p)))) param-grid)))
+        (let ((score (train-and-evaluate data labels test-data test-labels
+                                         (cdr (assoc 'max-depth params))
+                                         (cdr (assoc 'min-samples params)))))
+          (when (> score best-score)
+            (setf best-score score
+                  best-params params)))))
+    (list best-params best-score)))
