@@ -46,66 +46,78 @@
 
 ;; ------------------ Constraint Propagation Implementation ------------------
 
-(defpackage :sudoku-constraint-propagation
-  (:use :cl))
+(defconstant +size+ 9)
 
-(in-package :sudoku-constraint-propagation)
+;; Define Sudoku grid
+(defparameter *sudoku-grid* (make-array (list +size+ +size+)
+                                         :initial-contents '(
+  (5 0 1 0 0 0 6 0 4)
+  (0 9 0 3 0 6 0 5 0)
+  (0 0 0 0 9 0 0 0 0)
+  (4 0 0 0 0 0 0 0 9)
+  (0 0 0 1 0 9 0 0 0)
+  (7 0 0 0 0 0 0 0 6)
+  (0 0 0 0 2 0 0 0 0)
+  (0 8 0 5 0 7 0 6 0)
+  (1 0 3 0 0 0 7 0 2))))
 
-;; Reads a CSV file containing Sudoku puzzles
-(defun read-sudoku-dataset (filename)
-  (with-open-file (stream filename :direction :input)
-    (loop for line = (read-line stream nil)
-          while line
-          collect (split-sequence #\, line))))
+;; Initialize domain of possible values
+(defun initialize-grid ()
+  (let ((grid (make-array (list +size+ +size+))))
+    (loop for i below +size+ do
+      (loop for j below +size+ do
+        (setf (aref grid i j)
+              (if (zerop (aref *sudoku-grid* i j))
+                  (loop for n from 1 to +size+ collect n)
+                  (list (aref *sudoku-grid* i j)))))))
+    grid))
 
-;; Converts a flat string Sudoku representation into a 2D array
-(defun parse-sudoku (puzzle)
-  (let ((board (make-array '(9 9) :initial-element 0)))
-    (loop for i from 0 below 81
-          for row = (floor i 9)
-          for col = (mod i 9)
-          do (setf (aref board row col) (digit-char-p (char puzzle i))))
-    board))
+(defparameter *cell-grid* (initialize-grid))
 
-;; Applies constraint propagation to reduce possible values
-(defun apply-constraint-propagation (board)
-  (loop for row from 0 below 9
-        do (loop for col from 0 below 9
-                 when (= (aref board row col) 0)
-                 do (let ((possible-values (find-possible-values board row col)))
-                      (when (= (length possible-values) 1)
-                        (setf (aref board row col) (car possible-values)))))))
-  board)
+(defun get-row-values (grid row)
+  (remove-duplicates (remove-if-not #'numberp (mapcan #'identity (aref grid row)))))
 
-;; Wrapper function to solve Sudoku using constraint propagation
-(defun solve-sudoku-constraint-propagation (puzzle)
-  (let ((board (parse-sudoku puzzle)))
-    (apply-constraint-propagation board)
-    board))
+(defun get-column-values (grid col)
+  (remove-duplicates (remove-if-not #'numberp (loop for i below +size+ collect (aref grid i col)))))
 
-;; Solves all Sudoku puzzles in the dataset using constraint propagation
-(defun solve-sudoku-dataset-constraint-propagation (filename)
-  (mapcar #'(lambda (row) (solve-sudoku-constraint-propagation (first row))) (read-sudoku-dataset filename)))
+(defun get-box-values (grid row col)
+  (let* ((box-size (floor (sqrt +size+)))
+         (r-start (* box-size (floor row box-size)))
+         (c-start (* box-size (floor col box-size)))
+         (box-values '()))
+    (loop for i from r-start below (+ r-start box-size) do
+      (loop for j from c-start below (+ c-start box-size) do
+        (push (aref grid i j) box-values)))
+    (remove-duplicates (remove-if-not #'numberp box-values))))
 
-;;; COPY AND RUN THE COMMANDS BELOW IN TERMINAL
+(defun eliminate-constraints (grid)
+  (loop for i below +size+ do
+    (loop for j below +size+ do
+      (when (> (length (aref grid i j)) 1)
+        (let ((eliminated (append
+                            (get-row-values grid i)
+                            (get-column-values grid j)
+                            (get-box-values grid i j))))
+          (setf (aref grid i j) (set-difference (aref grid i j) eliminated)))))))
 
-;; Load and use the Backtracking Algorithm
-(ql:quickload :sudoku-backtracking)
-;; Example usage with a sample Sudoku puzzle
-(let ((sample-puzzle "530070000600195000098000060800060003400803001700020006060000280000419005000080079"))
-  (format t "Solving Sudoku with Backtracking:~%")
-  (solve-sudoku-backtracking sample-puzzle))
-;; Load and use the Constraint Propagation Algorithm
-(ql:quickload :sudoku-constraint-propagation)
-;; Example usage with the same sample puzzle
-(let ((sample-puzzle "530070000600195000098000060800060003400803001700020006060000280000419005000080079"))
-  (format t "Solving Sudoku with Constraint Propagation:~%")
-  (solve-sudoku-constraint-propagation sample-puzzle))
-;; Solve all puzzles from dataset using Backtracking
-(let ((dataset-file "sudoku.csv"))
-  (format t "Solving all Sudoku puzzles using Backtracking:~%")
-  (solve-sudoku-dataset-backtracking dataset-file))
-;; Solve all puzzles from dataset using Constraint Propagation
-(let ((dataset-file "sudoku.csv"))
-  (format t "Solving all Sudoku puzzles using Constraint Propagation:~%")
-  (solve-sudoku-dataset-constraint-propagation dataset-file))
+(defun apply-single-value-rule (grid)
+  (loop for i below +size+ do
+    (loop for j below +size+ do
+      (when (= (length (aref grid i j)) 1)
+        (setf (aref grid i j) (list (car (aref grid i j))))))))
+
+(defun sudoku-solved-p (grid)
+  (loop for i below +size+ always
+    (loop for j below +size+ always (numberp (aref grid i j)))))
+
+(defun solve-sudoku ()
+  (loop until (sudoku-solved-p *cell-grid*) do
+    (eliminate-constraints *cell-grid*)
+    (apply-single-value-rule *cell-grid*))
+  (print-sudoku *cell-grid*))
+
+(defun print-sudoku (grid)
+  (loop for i below +size+ do
+    (loop for j below +size+ do
+      (format t "~a " (if (listp (aref grid i j)) (car (aref grid i j)) (aref grid i j))))
+    (format t "~%")))
