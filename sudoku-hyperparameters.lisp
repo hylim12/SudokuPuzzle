@@ -1,5 +1,8 @@
+;; Backtracking Algorithm
+;; Define a constant for grid size (9X9 Sudoku grid)
 (defconstant +n+ 9)
 
+;; Function to check if a number can be placed in a given cell
 (defun is-safe (grid row col num)
   "Check if it's safe to place num in grid[row][col]"
   (loop for x from 0 below +n+
@@ -10,6 +13,7 @@
         do (return nil))
   t)
 
+;; Function to find an empty location
 (defun find-empty-location (grid row col)
   "Find an empty location in the grid"
   (loop for r from row below +n+
@@ -18,6 +22,7 @@
                  do (setf row r col c) (return t)))
   nil)
 
+;; Function to solve Sudoku using Backtracking
 (defun solve-sudoku (grid &optional (row 0) (col 0))
   "Solve the Sudoku puzzle using backtracking"
   (if (not (find-empty-location grid row col))
@@ -30,6 +35,7 @@
                (setf (aref grid row col) 0))  ; Undo move if unsuccessful
       nil))
 
+;; Function to print the grid
 (defun print-grid (grid)
   "Print the Sudoku grid"
   (loop for i below +n+
