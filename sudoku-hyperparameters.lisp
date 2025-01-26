@@ -1,59 +1,41 @@
-(defpackage :sudoku-backtracking
-  (:use :cl))
+(defconstant +n+ 9)
 
-(in-package :sudoku-backtracking)
+(defun is-safe (grid row col num)
+  "Check if it's safe to place num in grid[row][col]"
+  (loop for x from 0 below +n+
+        when (or (= (aref grid row x) num)
+                 (= (aref grid x col) num)
+                 (= (aref grid (+ (* 3 (/ row 3)) (mod x 3))
+                                  (+ (* 3 (/ col 3)) (floor x 3))) num))
+        do (return nil))
+  t)
 
-;; Reads a CSV file containing Sudoku puzzles
-(defun read-sudoku-dataset (filename)
-  (with-open-file (stream filename :direction :input)
-    (loop for line = (read-line stream nil)
-          while line
-          collect (split-sequence #\, line))))
-
-;; Converts a flat string Sudoku representation into a 2D array
-(defun parse-sudoku (puzzle)
-  (let ((board (make-array '(9 9) :initial-element 0)))
-    (loop for i from 0 below 81
-          for row = (floor i 9)
-          for col = (mod i 9)
-          do (setf (aref board row col) (digit-char-p (char puzzle i))))
-    board))
-
-;; Finds an empty cell (represented as 0)
-(defun find-empty-cell (board)
-  (loop for row from 0 below 9
-        do (loop for col from 0 below 9
-                 when (= (aref board row col) 0)
-                 do (return-from find-empty-cell (values row col))))
+(defun find-empty-location (grid row col)
+  "Find an empty location in the grid"
+  (loop for r from row below +n+
+        do (loop for c from (if (= r row) col 0) below +n+
+                 when (= (aref grid r c) 0)
+                 do (setf row r col c) (return t)))
   nil)
 
-;; Checks if placing a number in a specific cell is valid
-(defun is-valid (board row col num)
-  (or (not (member num (coerce (row-values board row) 'list)))
-      (not (member num (coerce (col-values board col) 'list)))
-      (not (member num (coerce (box-values board row col) 'list)))))
+(defun solve-sudoku (grid &optional (row 0) (col 0))
+  "Solve the Sudoku puzzle using backtracking"
+  (if (not (find-empty-location grid row col))
+      t  ; No empty location means puzzle is solved
+      (loop for num from 1 to +n+
+            when (is-safe grid row col num)
+            do (setf (aref grid row col) num)
+               (when (solve-sudoku grid row col)
+                 (return t))
+               (setf (aref grid row col) 0))  ; Undo move if unsuccessful
+      nil))
 
-;; Solves Sudoku using backtracking
-(defun backtracking-solve (board)
-  (multiple-value-bind (row col) (find-empty-cell board)
-    (if (not row)
-        t
-        (loop for num from 1 to 9
-              do (when (is-valid board row col num)
-                   (setf (aref board row col) num)
-                   (when (backtracking-solve board) (return t))
-                   (setf (aref board row col) 0)))
-        nil)))
-
-;; Wrapper function to solve Sudoku using backtracking
-(defun solve-sudoku-backtracking (puzzle)
-  (let ((board (parse-sudoku puzzle)))
-    (backtracking-solve board)
-    board))
-
-;; Solves all Sudoku puzzles in the dataset using backtracking
-(defun solve-sudoku-dataset-backtracking (filename)
-  (mapcar #'(lambda (row) (solve-sudoku-backtracking (first row))) (read-sudoku-dataset filename)))
+(defun print-grid (grid)
+  "Print the Sudoku grid"
+  (loop for i below +n+
+        do (loop for j below +n+
+                 do (format t "~d " (aref grid i j)))
+           (format t "~%")))
 
 
 ;; ------------------ Constraint Propagation Implementation ------------------
