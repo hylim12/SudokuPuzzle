@@ -44,8 +44,7 @@
            (format t "~%")))
 
 
-;; ------------------ Constraint Propagation Implementation ------------------
-
+;; Constraint Propagation Implementation
 (defconstant +size+ 9)
 
 ;; Define Sudoku grid
