@@ -98,3 +98,26 @@
 ;; Solves all Sudoku puzzles in the dataset using constraint propagation
 (defun solve-sudoku-dataset-constraint-propagation (filename)
   (mapcar #'(lambda (row) (solve-sudoku-constraint-propagation (first row))) (read-sudoku-dataset filename)))
+
+;;; COPY AND RUN THE COMMANDS BELOW IN TERMINAL
+
+;; Load and use the Backtracking Algorithm
+(ql:quickload :sudoku-backtracking)
+;; Example usage with a sample Sudoku puzzle
+(let ((sample-puzzle "530070000600195000098000060800060003400803001700020006060000280000419005000080079"))
+  (format t "Solving Sudoku with Backtracking:~%")
+  (solve-sudoku-backtracking sample-puzzle))
+;; Load and use the Constraint Propagation Algorithm
+(ql:quickload :sudoku-constraint-propagation)
+;; Example usage with the same sample puzzle
+(let ((sample-puzzle "530070000600195000098000060800060003400803001700020006060000280000419005000080079"))
+  (format t "Solving Sudoku with Constraint Propagation:~%")
+  (solve-sudoku-constraint-propagation sample-puzzle))
+;; Solve all puzzles from dataset using Backtracking
+(let ((dataset-file "sudoku.csv"))
+  (format t "Solving all Sudoku puzzles using Backtracking:~%")
+  (solve-sudoku-dataset-backtracking dataset-file))
+;; Solve all puzzles from dataset using Constraint Propagation
+(let ((dataset-file "sudoku.csv"))
+  (format t "Solving all Sudoku puzzles using Constraint Propagation:~%")
+  (solve-sudoku-dataset-constraint-propagation dataset-file))
