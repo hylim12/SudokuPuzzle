@@ -1,17 +1,17 @@
-(defpackage :sudoku-solver
+(defpackage :sudoku-backtracking
   (:use :cl))
 
-(in-package :sudoku-solver)
+(in-package :sudoku-backtracking)
 
+;; Reads a CSV file containing Sudoku puzzles
 (defun read-sudoku-dataset (filename)
-  "Reads a CSV file containing Sudoku puzzles and their solutions."
   (with-open-file (stream filename :direction :input)
     (loop for line = (read-line stream nil)
           while line
           collect (split-sequence #\, line))))
 
+;; Converts a flat string Sudoku representation into a 2D array
 (defun parse-sudoku (puzzle)
-  "Converts a flat string Sudoku representation into a 2D array."
   (let ((board (make-array '(9 9) :initial-element 0)))
     (loop for i from 0 below 81
           for row = (floor i 9)
@@ -19,22 +19,22 @@
           do (setf (aref board row col) (digit-char-p (char puzzle i))))
     board))
 
+;; Finds an empty cell (represented as 0)
 (defun find-empty-cell (board)
-  "Finds an empty cell in the Sudoku board (represented as 0)."
   (loop for row from 0 below 9
         do (loop for col from 0 below 9
                  when (= (aref board row col) 0)
                  do (return-from find-empty-cell (values row col))))
   nil)
 
+;; Checks if placing a number in a specific cell is valid
 (defun is-valid (board row col num)
-  "Checks whether placing NUM in (row, col) is valid."
   (or (not (member num (coerce (row-values board row) 'list)))
       (not (member num (coerce (col-values board col) 'list)))
       (not (member num (coerce (box-values board row col) 'list)))))
 
+;; Solves Sudoku using backtracking
 (defun backtracking-solve (board)
-  "Solves the Sudoku puzzle using backtracking."
   (multiple-value-bind (row col) (find-empty-cell board)
     (if (not row)
         t
@@ -45,8 +45,42 @@
                    (setf (aref board row col) 0)))
         nil)))
 
+;; Wrapper function to solve Sudoku using backtracking
+(defun solve-sudoku-backtracking (puzzle)
+  (let ((board (parse-sudoku puzzle)))
+    (backtracking-solve board)
+    board))
+
+;; Solves all Sudoku puzzles in the dataset using backtracking
+(defun solve-sudoku-dataset-backtracking (filename)
+  (mapcar #'(lambda (row) (solve-sudoku-backtracking (first row))) (read-sudoku-dataset filename)))
+
+
+;; ------------------ Constraint Propagation Implementation ------------------
+
+(defpackage :sudoku-constraint-propagation
+  (:use :cl))
+
+(in-package :sudoku-constraint-propagation)
+
+;; Reads a CSV file containing Sudoku puzzles
+(defun read-sudoku-dataset (filename)
+  (with-open-file (stream filename :direction :input)
+    (loop for line = (read-line stream nil)
+          while line
+          collect (split-sequence #\, line))))
+
+;; Converts a flat string Sudoku representation into a 2D array
+(defun parse-sudoku (puzzle)
+  (let ((board (make-array '(9 9) :initial-element 0)))
+    (loop for i from 0 below 81
+          for row = (floor i 9)
+          for col = (mod i 9)
+          do (setf (aref board row col) (digit-char-p (char puzzle i))))
+    board))
+
+;; Applies constraint propagation to reduce possible values
 (defun apply-constraint-propagation (board)
-  "Reduces possibilities by applying constraint rules before backtracking."
   (loop for row from 0 below 9
         do (loop for col from 0 below 9
                  when (= (aref board row col) 0)
@@ -55,13 +89,12 @@
                         (setf (aref board row col) (car possible-values)))))))
   board)
 
-(defun solve-sudoku (puzzle)
-  "Solves a Sudoku puzzle by applying constraint propagation and backtracking."
+;; Wrapper function to solve Sudoku using constraint propagation
+(defun solve-sudoku-constraint-propagation (puzzle)
   (let ((board (parse-sudoku puzzle)))
     (apply-constraint-propagation board)
-    (backtracking-solve board)
     board))
 
-(defun solve-sudoku-dataset (filename)
-  "Solves all Sudoku puzzles in the dataset."
-  (mapcar #'(lambda (row) (solve-sudoku (first row))) (read-sudoku-dataset filename)))
+;; Solves all Sudoku puzzles in the dataset using constraint propagation
+(defun solve-sudoku-dataset-constraint-propagation (filename)
+  (mapcar #'(lambda (row) (solve-sudoku-constraint-propagation (first row))) (read-sudoku-dataset filename)))
