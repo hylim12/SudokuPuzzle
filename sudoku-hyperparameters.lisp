@@ -45,78 +45,125 @@
 
 
 ;; Constraint Propagation Implementation
-(defconstant +size+ 9)
+(defconstant +size+ 9)  ;; Define the size of the Sudoku grid
 
-;; Define Sudoku grid
-(defparameter *sudoku-grid* (make-array (list +size+ +size+)
-                                         :initial-contents '(
-  (5 0 1 0 0 0 6 0 4)
-  (0 9 0 3 0 6 0 5 0)
-  (0 0 0 0 9 0 0 0 0)
-  (4 0 0 0 0 0 0 0 9)
-  (0 0 0 1 0 9 0 0 0)
-  (7 0 0 0 0 0 0 0 6)
-  (0 0 0 0 2 0 0 0 0)
-  (0 8 0 5 0 7 0 6 0)
-  (1 0 3 0 0 0 7 0 2))))
+;; Define a structure to represent a Sudoku cell
+(defstruct cell
+  row col found value possible-values)  ;; Each cell has a row, column, found status, value, and possible values
 
-;; Initialize domain of possible values
-(defun initialize-grid ()
-  (let ((grid (make-array (list +size+ +size+))))
-    (loop for i below +size+ do
-      (loop for j below +size+ do
-        (setf (aref grid i j)
-              (if (zerop (aref *sudoku-grid* i j))
-                  (loop for n from 1 to +size+ collect n)
-                  (list (aref *sudoku-grid* i j)))))))
-    grid))
+;; Initialize the Sudoku grid
+(defun initialize-sudoku (puzzle)
+  "Creates a list of lists representing the Sudoku grid with constraint propagation."
+  (mapcar #'(lambda (row r)
+              (mapcar #'(lambda (value c)
+                         (if (= value 0)  ;; If the cell is empty, set possible values from 1-9
+                             (make-cell :row r :col c :found nil :value nil :possible-values '(1 2 3 4 5 6 7 8 9))
+                             (make-cell :row r :col c :found t :value value :possible-values '())))
+                      row (loop for c from 0 to (- +size+ 1) collect c)))
+          puzzle (loop for r from 0 to (- +size+ 1) collect r)))
 
-(defparameter *cell-grid* (initialize-grid))
+;; Retrieve a specific cell from the grid
+(defun get-cell (grid row col)
+  (nth col (nth row grid)))
 
-(defun get-row-values (grid row)
-  (remove-duplicates (remove-if-not #'numberp (mapcan #'identity (aref grid row)))))
+;; Set the value of a cell and mark it as found
+(defun set-cell-value (grid row col value)
+  (setf (cell-value (get-cell grid row col)) value)  ;; Assign the value to the cell
+  (setf (cell-found (get-cell grid row col)) t)  ;; Mark the cell as found
+  (setf (cell-possible-values (get-cell grid row col)) '()))  ;; Clear possible values
 
-(defun get-column-values (grid col)
-  (remove-duplicates (remove-if-not #'numberp (loop for i below +size+ collect (aref grid i col)))))
+;; Eliminate impossible values based on constraints
+(defun eliminate (grid)
+  "Eliminates impossible values from each cell based on Sudoku constraints."
+  (loop for row from 0 below +size+ do
+        (loop for col from 0 below +size+ do
+              (let ((cell (get-cell grid row col)))
+                (when (not (cell-found cell))
+                  (let ((non-possible-values (get-non-possible-values grid row col)))
+                    (setf (cell-possible-values cell)
+                          (set-difference (cell-possible-values cell) non-possible-values))))))))
 
-(defun get-box-values (grid row col)
-  (let* ((box-size (floor (sqrt +size+)))
-         (r-start (* box-size (floor row box-size)))
-         (c-start (* box-size (floor col box-size)))
-         (box-values '()))
-    (loop for i from r-start below (+ r-start box-size) do
-      (loop for j from c-start below (+ c-start box-size) do
-        (push (aref grid i j) box-values)))
-    (remove-duplicates (remove-if-not #'numberp box-values))))
+;; Get values that are already present in the row, column, and 3x3 box
+(defun get-non-possible-values (grid row col)
+  "Returns a list of numbers already present in the row, column, and 3x3 box."
+  (let ((values '()))
+    ;; Collect row values
+    (loop for c from 0 below +size+ do
+          (let ((cell (get-cell grid row c)))
+            (when (cell-found cell)
+              (pushnew (cell-value cell) values))))
+    ;; Collect column values
+    (loop for r from 0 below +size+ do
+          (let ((cell (get-cell grid r col)))
+            (when (cell-found cell)
+              (pushnew (cell-value cell) values))))
+    ;; Collect box values
+    (let* ((box-start-row (* 3 (floor row 3)))
+           (box-start-col (* 3 (floor col 3))))
+      (loop for r from box-start-row below (+ box-start-row 3) do
+            (loop for c from box-start-col below (+ box-start-col 3) do
+                  (let ((cell (get-cell grid r c)))
+                    (when (cell-found cell)
+                      (pushnew (cell-value cell) values)))))))
+    values))
 
-(defun eliminate-constraints (grid)
-  (loop for i below +size+ do
-    (loop for j below +size+ do
-      (when (> (length (aref grid i j)) 1)
-        (let ((eliminated (append
-                            (get-row-values grid i)
-                            (get-column-values grid j)
-                            (get-box-values grid i j))))
-          (setf (aref grid i j) (set-difference (aref grid i j) eliminated)))))))
+;; Solve using constraint propagation
+(defun constraint-solve (grid)
+  "Solves the Sudoku puzzle using Constraint Propagation."
+  (loop until (is-solved grid) do
+        (eliminate grid)
+        (apply-single-value-rule grid)
+        (apply-only-choice-rule grid)))
 
+;; Apply the rule where a cell has only one possible value left
 (defun apply-single-value-rule (grid)
-  (loop for i below +size+ do
-    (loop for j below +size+ do
-      (when (= (length (aref grid i j)) 1)
-        (setf (aref grid i j) (list (car (aref grid i j))))))))
+  "If any cell has only one possible value, set it."
+  (loop for row from 0 below +size+ do
+        (loop for col from 0 below +size+ do
+              (let ((cell (get-cell grid row col)))
+                (when (and (not (cell-found cell)) (= (length (cell-possible-values cell)) 1))
+                  (set-cell-value grid row col (car (cell-possible-values cell))))))))
 
-(defun sudoku-solved-p (grid)
-  (loop for i below +size+ always
-    (loop for j below +size+ always (numberp (aref grid i j)))))
+;; Apply the rule where a number can only appear in one position in a row, column, or box
+(defun apply-only-choice-rule (grid)
+  "Finds a number that can only appear in one cell of a row, column, or box."
+  ;; Apply for rows
+  (loop for row from 0 below +size+ do
+        (loop for num from 1 to +size+ do
+              (let ((possible-cells '()))
+                (loop for col from 0 below +size+ do
+                      (let ((cell (get-cell grid row col)))
+                        (when (and (not (cell-found cell)) (member num (cell-possible-values cell)))
+                          (push col possible-cells))))
+                (when (= (length possible-cells) 1)
+                  (set-cell-value grid row (car possible-cells) num)))))
+  ;; Apply for columns
+  (loop for col from 0 below +size+ do
+        (loop for num from 1 to +size+ do
+              (let ((possible-cells '()))
+                (loop for row from 0 below +size+ do
+                      (let ((cell (get-cell grid row col)))
+                        (when (and (not (cell-found cell)) (member num (cell-possible-values cell)))
+                          (push row possible-cells))))
+                (when (= (length possible-cells) 1)
+                  (set-cell-value grid (car possible-cells) col num))))))
 
-(defun solve-sudoku ()
-  (loop until (sudoku-solved-p *cell-grid*) do
-    (eliminate-constraints *cell-grid*)
-    (apply-single-value-rule *cell-grid*))
-  (print-sudoku *cell-grid*))
+;; Check if the Sudoku is completely solved
+(defun is-solved (grid)
+  "Checks if the Sudoku is completely solved."
+  (loop for row from 0 below +size+ always
+        (loop for col from 0 below +size+ always
+              (cell-found (get-cell grid row col)))))
 
+;; Print the Sudoku grid in a readable format
 (defun print-sudoku (grid)
-  (loop for i below +size+ do
-    (loop for j below +size+ do
-      (format t "~a " (if (listp (aref grid i j)) (car (aref grid i j)) (aref grid i j))))
-    (format t "~%")))
+  "Prints the Sudoku grid in a readable format."
+  (loop for row from 0 below +size+ do
+        (loop for col from 0 below +size+ do
+              (format t "~D " (cell-value (get-cell grid row col))))
+        (format t "~%")))
+
+;; Solve the Sudoku
+(let ((grid (initialize-sudoku *example-puzzle*)))
+  (constraint-solve grid)
+  (print-sudoku grid))
