@@ -25,7 +25,7 @@
 (let ((time (measure-time #'dfs-sudoku-solver puzzle)))
   (format t "DFS took ~A milliseconds.~%" time))
 
-;; Check the memory space used in processing data using DFS
+;; Check the memory used in processing data using DFS
 (check-memory-usage)
 
 ;; Call the measure-time function to measure the processing time for A* Search
@@ -33,7 +33,7 @@
 (let ((time (measure-time #'a-star-sudoku-solver puzzle)))
   (format t "A* took ~A milliseconds.~%" time))
 
-;; Check the memory space used in processing data using A* Search
+;; Check the memory used in processing data using A* Search
 (check-memory-usage)
 
 ;; Call the evaluate-precision function to test the precision for each search method
